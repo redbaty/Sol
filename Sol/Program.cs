@@ -77,9 +77,9 @@ namespace Sol
             switch (conversionType)
             {
                 case ConversionType.XlsxToJson:
-                    return SolConverter.ToJson(fileStream);
+                    return SolConverter.ToJson(fileStream, null);
                 case ConversionType.JsonToXls:
-                    return await SolConverter.ToXlsx(fileStream);
+                    return await SolConverter.ToXlsx(fileStream, null);
                 default:
                     throw new ArgumentOutOfRangeException(nameof(conversionType));
             }

@@ -1,6 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
-using OfficeOpenXml;
-using OfficeOpenXml.FormulaParsing.Excel.Functions.Information;
+﻿using OfficeOpenXml;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,6 +11,7 @@ namespace Sol.Core
 {
     public static class SolConverter
     {
+#nullable enable
         public static async Task<byte[]> ToXlsx(Stream? jsonStream, SolConverterOptions? options)
         {
             if (jsonStream is null)
@@ -68,6 +67,7 @@ namespace Sol.Core
             var values = ReadValues(currentRow, worksheet, reverseColumnMapping, options);
             return WriteValues(values, options);
         }
+#nullable restore
 
         private static Dictionary<string, int> ReadColumns(ref int row, ExcelWorksheet worksheet, SolConverterOptions options)
         {
