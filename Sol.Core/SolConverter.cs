@@ -11,11 +11,20 @@ using System.Threading.Tasks;
 
 namespace Sol.Core
 {
-
     public static class SolConverter
     {
-        public static async Task<byte[]> ToXlsx(Stream jsonStream)
+        public static async Task<byte[]> ToXlsx(Stream? jsonStream, SolConverterOptions? options)
         {
+            if (jsonStream is null)
+            {
+                throw new ArgumentNullException(nameof(jsonStream));
+            }
+
+            if (options is null)
+            {
+                options = SolConverterOptions.Default;
+            }
+
             var jDoc = await JsonDocument.ParseAsync(jsonStream);
             var doc = jDoc.RootElement;
             var rawColumns = new List<string>();
@@ -31,26 +40,36 @@ namespace Sol.Core
             var worksheet = package.Workbook.Worksheets.Add("json");
             var currentRow = 1;
 
-            WriteHeaders(ref currentRow, worksheet, columnMapping);
-            WriteValues(ref currentRow, worksheet, columnMapping, doc);
+            WriteHeaders(ref currentRow, worksheet, columnMapping, options);
+            WriteValues(ref currentRow, worksheet, columnMapping, doc, options);
             worksheet.AutoFit();
 
             return package.GetAsByteArray();
         }
 
-        public static byte[] ToJson(Stream excelStream)
+        public static byte[] ToJson(Stream? excelStream, SolConverterOptions? options)
         {
+            if (excelStream is null)
+            {
+                throw new ArgumentNullException(nameof(excelStream));
+            }
+
+            if (options is null)
+            {
+                options = SolConverterOptions.Default;
+            }
+
             var package = new ExcelPackage();
             package.Load(excelStream);
 
             var currentRow = 1;
             var worksheet = package.Workbook.Worksheets.First();
-            var reverseColumnMapping = ReadColumns(ref currentRow, worksheet).ToDictionary(i => i.Value, i => i.Key);
-            var values = ReadValues(currentRow, worksheet, reverseColumnMapping);
-            return WriteValues(values);
+            var reverseColumnMapping = ReadColumns(ref currentRow, worksheet, options).ToDictionary(i => i.Value, i => i.Key);
+            var values = ReadValues(currentRow, worksheet, reverseColumnMapping, options);
+            return WriteValues(values, options);
         }
 
-        private static Dictionary<string, int> ReadColumns(ref int row, ExcelWorksheet worksheet)
+        private static Dictionary<string, int> ReadColumns(ref int row, ExcelWorksheet worksheet, SolConverterOptions options)
         {
             var maxColumn = worksheet.Dimension.Columns;
             var toReturn = new Dictionary<string, int>();
@@ -71,7 +90,7 @@ namespace Sol.Core
             return toReturn;
         }
 
-        private static IEnumerable<Dictionary<string, string>> ReadValues(int startingRow, ExcelWorksheet worksheet, Dictionary<int, string> reverseColumnMapping)
+        private static IEnumerable<Dictionary<string, string>> ReadValues(int startingRow, ExcelWorksheet worksheet, Dictionary<int, string> reverseColumnMapping, SolConverterOptions options)
         {
             var maxRow = worksheet.Dimension.Rows;
 
@@ -80,24 +99,25 @@ namespace Sol.Core
                 var maxColumn = worksheet.Dimension.Columns;
                 var rowData = new Dictionary<string, string>();
 
-                for (int currentColumn = 1; currentColumn <= maxColumn; currentColumn++)
+                for (int currentColumn = 1; currentColumn <= reverseColumnMapping.Max(i => i.Key); currentColumn++)
                 {
                     var cell = worksheet.Cells[row, currentColumn];
                     var cellValue = cell.Value?.ToString();
                     rowData.Add(reverseColumnMapping[currentColumn], cellValue);
                 }
 
-                yield return rowData;
+                if(!options.IgnoreNullOnlyRows || rowData.Any(i => i.Value != null))
+                    yield return rowData;
             }
         }
 
-        private static byte[] WriteValues(IEnumerable<Dictionary<string, string>> values)
+        private static byte[] WriteValues(IEnumerable<Dictionary<string, string>> values, SolConverterOptions options)
         {
-            var json = Newtonsoft.Json.JsonConvert.SerializeObject(values, Newtonsoft.Json.Formatting.Indented);
+            var json = Newtonsoft.Json.JsonConvert.SerializeObject(values, options.WriteFormatted ? Newtonsoft.Json.Formatting.Indented : Newtonsoft.Json.Formatting.None);
             return Encoding.UTF8.GetBytes(json);
         }
 
-        private static void WriteValues(ref int currentRow, ExcelWorksheet worksheet, Dictionary<string, int> columnMappings, JsonElement doc)
+        private static void WriteValues(ref int currentRow, ExcelWorksheet worksheet, Dictionary<string, int> columnMappings, JsonElement doc, SolConverterOptions options)
         {
             foreach (var node in doc.EnumerateArray())
             {
@@ -112,7 +132,7 @@ namespace Sol.Core
             }
         }
 
-        private static void WriteHeaders(ref int currentRow, ExcelWorksheet worksheet, Dictionary<string, int> columnMapping)
+        private static void WriteHeaders(ref int currentRow, ExcelWorksheet worksheet, Dictionary<string, int> columnMapping, SolConverterOptions options)
         {
             foreach (var (key, value) in columnMapping)
             {
