@@ -16,6 +16,7 @@ namespace Sol
             if (!file.Exists)
             {
                 Console.WriteLine("File \"{0}\" is a lie", file.FullName);
+                WaitForExitIfNecessary(args);
                 return;
             }
 
@@ -29,7 +30,11 @@ namespace Sol
             await File.WriteAllBytesAsync(outputFileName, result);
 
             Console.WriteLine("Successfully converted file. Saved as: {0}", outputFileName);
+            WaitForExitIfNecessary(args);
+        }
 
+        private static void WaitForExitIfNecessary(string[] args)
+        {
             if (args.Length == 0)
             {
                 Console.WriteLine("Press any key to exit.");
