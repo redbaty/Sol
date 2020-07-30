@@ -20,4 +20,4 @@ jobs:
     - name: Install dependencies
       run: dotnet restore
     - name: Build
-      run: dotnet build --configuration Release --no-restore -p:PublishSingleFile=true
+      run: dotnet build --configuration Release --no-restore -p:PublishSingleFile=true -r win-x64
