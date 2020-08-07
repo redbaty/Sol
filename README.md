@@ -6,3 +6,7 @@ Bidirectional JSON to XLSX converter.
 `./sol.exe path-to-file`
 
 if file extension is json, then the file will be converted to xlsx and vice-versa.
+
+# Limitations
+
+Currently only top-level JSON arrays are supported.
