@@ -1,11 +1,11 @@
-﻿using OfficeOpenXml;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ClosedXML.Excel;
 
 namespace Sol.Core
 {
@@ -19,11 +19,7 @@ namespace Sol.Core
                 throw new ArgumentNullException(nameof(jsonStream));
             }
 
-            if (options is null)
-            {
-                options = SolConverterOptions.Default;
-            }
-
+            options ??= SolConverterOptions.Default;
             var jDoc = await JsonDocument.ParseAsync(jsonStream);
             var doc = jDoc.RootElement;
             var rawColumns = new List<string>();
@@ -35,15 +31,16 @@ namespace Sol.Core
 
             var columnMapping = rawColumns.Select((i, n) => new { Header = i, ColumnIndex = n + 1 }).ToDictionary(i => i.Header, i => i.ColumnIndex);
 
-            var package = new ExcelPackage();
-            var worksheet = package.Workbook.Worksheets.Add("json");
+            using var package = new XLWorkbook();
+            var worksheet = package.Worksheets.Add("json");
             var currentRow = 1;
 
-            WriteHeaders(ref currentRow, worksheet, columnMapping, options);
-            WriteValues(ref currentRow, worksheet, columnMapping, doc, options);
-            worksheet.AutoFit();
+            WriteHeaders(ref currentRow, worksheet, columnMapping);
+            WriteValues(ref currentRow, worksheet, columnMapping, doc);
 
-            return package.GetAsByteArray();
+            using var outputMemoryStream = new MemoryStream();
+            package.SaveAs(outputMemoryStream);
+            return outputMemoryStream.ToArray();
         }
 
         public static byte[] ToJson(Stream? excelStream, SolConverterOptions? options)
@@ -53,31 +50,26 @@ namespace Sol.Core
                 throw new ArgumentNullException(nameof(excelStream));
             }
 
-            if (options is null)
-            {
-                options = SolConverterOptions.Default;
-            }
+            options ??= SolConverterOptions.Default;
 
-            var package = new ExcelPackage();
-            package.Load(excelStream);
-
+            using var package = new XLWorkbook(excelStream);
             var currentRow = 1;
-            var worksheet = package.Workbook.Worksheets.First();
-            var reverseColumnMapping = ReadColumns(ref currentRow, worksheet, options).ToDictionary(i => i.Value, i => i.Key);
+            var worksheet = package.Worksheets.First();
+            var reverseColumnMapping = ReadColumns(ref currentRow, worksheet).ToDictionary(i => i.Value, i => i.Key);
             var values = ReadValues(currentRow, worksheet, reverseColumnMapping, options);
             return WriteValues(values, options);
         }
 #nullable restore
 
-        private static Dictionary<string, int> ReadColumns(ref int row, ExcelWorksheet worksheet, SolConverterOptions options)
+        private static Dictionary<string, int> ReadColumns(ref int row, IXLWorksheet worksheet)
         {
-            var maxColumn = worksheet.Dimension.Columns;
+            var maxColumn = worksheet.ColumnCount();
             var toReturn = new Dictionary<string, int>();
 
             for (int currentColumn = 1; currentColumn <= maxColumn; currentColumn++)
             {
-                var cell = worksheet.Cells[row, currentColumn];
-                var cellValue = cell.Value?.ToString();
+                var cell = worksheet.Cell(row, currentColumn);
+                var cellValue = cell.Value.ToString();
 
                 if (string.IsNullOrEmpty(cellValue))
                     continue;
@@ -90,19 +82,18 @@ namespace Sol.Core
             return toReturn;
         }
 
-        private static IEnumerable<Dictionary<string, string>> ReadValues(int startingRow, ExcelWorksheet worksheet, Dictionary<int, string> reverseColumnMapping, SolConverterOptions options)
+        private static IEnumerable<Dictionary<string, string>> ReadValues(int startingRow, IXLWorksheet worksheet, Dictionary<int, string> reverseColumnMapping, SolConverterOptions options)
         {
-            var maxRow = worksheet.Dimension.Rows;
+            var maxRow = worksheet.RowCount();
 
             for (var row = startingRow; row <= maxRow; row++)
             {
-                var maxColumn = worksheet.Dimension.Columns;
                 var rowData = new Dictionary<string, string>();
 
                 for (int currentColumn = 1; currentColumn <= reverseColumnMapping.Max(i => i.Key); currentColumn++)
                 {
-                    var cell = worksheet.Cells[row, currentColumn];
-                    var cellValue = cell.Value?.ToString();
+                    var cell = worksheet.Cell(row, currentColumn);
+                    var cellValue = cell.Value.ToString();
                     rowData.Add(reverseColumnMapping[currentColumn], cellValue);
                 }
 
@@ -117,7 +108,7 @@ namespace Sol.Core
             return Encoding.UTF8.GetBytes(json);
         }
 
-        private static void WriteValues(ref int currentRow, ExcelWorksheet worksheet, Dictionary<string, int> columnMappings, JsonElement doc, SolConverterOptions options)
+        private static void WriteValues(ref int currentRow, IXLWorksheet worksheet, Dictionary<string, int> columnMappings, JsonElement doc)
         {
             foreach (var node in doc.EnumerateArray())
             {
@@ -125,18 +116,18 @@ namespace Sol.Core
                 {
                     var columnMapping = columnMappings[prop.Name];
                     var value = prop.Value.ValueKind == JsonValueKind.String ? prop.Value.GetString() : prop.Value.GetRawText();
-                    worksheet.Cells[currentRow, columnMapping].Value = value;
+                    worksheet.Cell(currentRow, columnMapping).Value = value;
                 }
 
                 currentRow++;
             }
         }
 
-        private static void WriteHeaders(ref int currentRow, ExcelWorksheet worksheet, Dictionary<string, int> columnMapping, SolConverterOptions options)
+        private static void WriteHeaders(ref int currentRow, IXLWorksheet worksheet, Dictionary<string, int> columnMapping)
         {
             foreach (var (key, value) in columnMapping)
             {
-                worksheet.Cells[currentRow, value].Value = key;
+                worksheet.Cell(currentRow, value).Value = key;
             }
 
             currentRow++;

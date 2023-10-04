@@ -1,27 +1,15 @@
-﻿using OfficeOpenXml;
+﻿using System.IO;
+using ClosedXML.Excel;
 
 namespace Sol.Core
 {
     internal static class ExcelExtensions
     {
-        public static void AutoFit(this ExcelPackage package)
+        public static byte[] GetAsByteArray(this XLWorkbook package)
         {
-            package.Workbook.AutoFit();
-        }
-
-        public static void AutoFit(this ExcelWorkbook workbook)
-        {
-            foreach (var worksheet in workbook.Worksheets)
-            {
-                worksheet.AutoFit();
-            }
-        }
-
-        public static void AutoFit(this ExcelWorksheet sheet)
-        {
-            if (sheet.Dimension != null)
-                sheet.Cells[sheet.Dimension.Address]
-                    .AutoFitColumns();
+            using var outputMemoryStream = new MemoryStream();
+            package.SaveAs(outputMemoryStream);
+            return outputMemoryStream.ToArray();
         }
     }
 }

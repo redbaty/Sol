@@ -1,6 +1,6 @@
 ﻿namespace Sol
 {
-    enum ConversionType
+    public enum ConversionType
     {
         XlsxToJson,
         JsonToXls
