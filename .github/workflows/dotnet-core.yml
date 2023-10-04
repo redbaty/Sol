@@ -16,7 +16,7 @@ jobs:
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: 3.1.301
+        dotnet-version: 6.0.317
     - name: Build Windows X64
       run: dotnet publish --configuration Release --self-contained -r win-x64 -p:PublishSingleFile=true -o build-win-x64 ./Sol/Sol.csproj
     - name: Build Linux X64
