@@ -40,7 +40,7 @@ namespace Sol
         [CommandOption("root", 'r')]
         public string Root { get; set; }
         
-        [CommandOption("property-as-row")]
+        [CommandOption("property-as-row", 'p')]
         public bool PropertyAsRow { get; set; }
 
         private IServiceProvider ServiceProvider { get; }

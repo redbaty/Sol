@@ -26,8 +26,14 @@ namespace Sol.Core
 
         private record Row(JsonRowValue[] Values);
 
-        private static IEnumerable<JsonRowValue> ReadElementValues(JsonElement rootElement, string basePath)
+        private IEnumerable<JsonRowValue> ReadElementValues(JsonElement rootElement, string basePath)
         {
+            if (rootElement.ValueKind != JsonValueKind.Object)
+            {
+                yield return new JsonRowValue(rootElement.GetRawText(), $"{basePath}");
+                yield break;
+            }
+            
             foreach (var jsonProperty in rootElement.EnumerateObject())
             {
                 if (jsonProperty.Value.ValueKind != JsonValueKind.Array && jsonProperty.Value.ValueKind != JsonValueKind.Object)
@@ -49,14 +55,38 @@ namespace Sol.Core
 
         private IEnumerable<Row> ReadElementAsRow(JsonElement rootElement)
         {
+            if (Options.Value.PropertiesAsRow)
+            {
+                if(rootElement.ValueKind != JsonValueKind.Object)
+                    throw new Exception("Root element must be an object to use property as row.");
+                
+                foreach (var jsonElement in rootElement.EnumerateObject())
+                {
+                    if (jsonElement.Value.ValueKind != JsonValueKind.Object)
+                    {
+                        var value = new JsonRowValue(jsonElement.Value.GetRawText(), "property_value");
+                        var property = new JsonRowValue(jsonElement.Name, "property_name");
+                        yield return new Row([property, value]);
+                    }
+                    else
+                    {
+                        var objectValues = ReadElementValues(jsonElement.Value, jsonElement.Name).ToArray();
+
+                        foreach (var value in objectValues)
+                        {
+                            var property = new JsonRowValue($"{jsonElement.Name}.{value.Path}", "property_name");
+                            yield return new Row([property, value with { Path = "property_value" }]);
+                        }
+                    }
+                }
+
+                yield break;
+            }
+
             switch (rootElement.ValueKind)
             {
                 case JsonValueKind.Object:
-                    if (Options.Value.PropertiesAsRow)
-                        foreach (var jsonElement in rootElement.EnumerateObject())
-                            yield return new Row(ReadElementValues(jsonElement.Value, string.Empty).Concat(new[] { new JsonRowValue(jsonElement.Name, "property_name") }).Reverse().ToArray());
-                    else
-                        yield return new Row(ReadElementValues(rootElement, string.Empty).ToArray());
+                    yield return new Row(ReadElementValues(rootElement, string.Empty).ToArray());
                     break;
                 case JsonValueKind.Array:
                 {
@@ -64,6 +94,12 @@ namespace Sol.Core
                         yield return new Row(ReadElementValues(jsonElement, string.Empty).ToArray());
                     break;
                 }
+                case JsonValueKind.Undefined:
+                case JsonValueKind.String:
+                case JsonValueKind.Number:
+                case JsonValueKind.True:
+                case JsonValueKind.False:
+                case JsonValueKind.Null:
                 default:
                     throw new NotImplementedException();
             }
